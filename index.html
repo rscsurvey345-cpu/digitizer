@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบสรุปผลการนำเข้าข้อมูล GIS (Digitizer Dashboard)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Font - Kanit -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        kanit: ['Kanit', 'sans-serif'],
+                    },
+                    colors: {
+                        emerald: {
+                            50: '#ecfdf5',
+                            100: '#d1fae5',
+                            200: '#a7f3d0',
+                            300: '#6ee7b7',
+                            400: '#34d399',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                            800: '#065f46',
+                            900: '#064e3b',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #f4fbf7;
+            /* Sugarcane SVG Watermark Pattern */
+            background-image: radial-gradient(#059669 0.5px, transparent 0.5px), radial-gradient(#059669 0.5px, #f4fbf7 0.5px);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+            background-opacity: 0.05;
+        }
+        .watermark-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.03;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='%23059669'%3E%3Cpath d='M30,90 Q35,50 25,10 Q28,10 33,50 Q38,90 30,90 Z M32,40 Q50,30 65,35 Q50,40 32,45 Z M28,60 Q10,50 2,55 Q10,60 28,65 Z'/%3E%3C/svg%3E");
+            background-repeat: repeat;
+            background-size: 180px 180px;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(167, 243, 208, 0.5);
+        }
+        .nav-btn.active {
+            background-color: #059669;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 relative pb-12">
+    <!-- Watermark Layer -->
+    <div class="watermark-overlay"></div>
+
+    <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+        
+        <!-- Header -->
+        <header class="glass-card rounded-2xl p-6 mb-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 border-l-8 border-l-emerald-600">
+            <div class="flex items-center gap-4">
+                <div class="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl shadow-inner">
+                    <i class="fa-solid font-bold fa-map-location-dot"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-800 tracking-wide flex items-center gap-2">
+                        GIS Digitizer Summary Dashboard
+                        <span class="text-xs bg-emerald-100 text-emerald-800 font-semibold px-2.5 py-0.5 rounded-full border border-emerald-300">
+                            <i class="fa-solid fa-wheat-awn mr-1"></i> Sugarcane Project
+                        </span>
+                    </h1>
+                    <p class="text-sm text-slate-500 mt-0.5">ระบบติดตามความก้าวหน้าการนำเข้าข้อมูล ถนน ลำน้ำ และแหล่งน้ำ (9 ราย)</p>
+                </div>
+            </div>
+
+            <!-- Configuration / GAS Status -->
+            <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+                <button onclick="openApiModal()" class="px-3.5 py-2 text-xs font-medium bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-xl transition flex items-center gap-2">
+                    <i class="fa-solid fa-plug text-emerald-600"></i>
+                    <span id="apiUrlStatusText">ตั้งค่า Web App URL</span>
+                </button>
+                <button onclick="fetchData()" class="p-2.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition" title="รีเฟรชข้อมูล">
+                    <i class="fa-solid fa-rotate-right" id="refreshIcon"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Tab Navigation Bar -->
+        <div class="flex bg-emerald-900/5 p-1.5 rounded-2xl mb-6 border border-emerald-200/60 max-w-xl mx-auto">
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="nav-btn active flex-1 py-2.5 text-sm font-medium rounded-xl transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-chart-pie"></i> Dashboard สรุปผล
+            </button>
+            <button onclick="switchTab('form')" id="tab-form" class="nav-btn flex-1 py-2.5 text-sm font-medium rounded-xl transition text-slate-600 hover:text-emerald-700 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-pen-to-square"></i> กรอก/อัปเดตข้อมูล
+            </button>
+            <button onclick="switchTab('table')" id="tab-table" class="nav-btn flex-1 py-2.5 text-sm font-medium rounded-xl transition text-slate-600 hover:text-emerald-700 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-table"></i> ตารางข้อมูลทั้งหมด
+            </button>
+        </div>
+
+        <!-- Content Area -->
+        <main>
+            <!-- TAB 1: DASHBOARD -->
+            <section id="content-dashboard" class="space-y-6">
+                <!-- KPI Summary Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Road KPI -->
+                    <div class="glass-card rounded-2xl p-5 shadow-sm border-t-4 border-t-emerald-500 hover:shadow-md transition">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">ระยะทางถนนรวม</span>
+                            <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                                <i class="fa-solid fa-road"></i>
+                            </div>
+                        </div>
+                        <div class="text-2xl font-bold text-slate-800 mb-1" id="kpiRoadTotal">0 <span class="text-sm font-normal text-slate-500">กม.</span></div>
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-slate-500">ความก้าวหน้าเฉลี่ย</span>
+                            <span class="font-bold text-emerald-600" id="kpiRoadPct">0%</span>
+                        </div>
+                        <div class="w-full bg-emerald-100 h-1.5 rounded-full mt-2 overflow-hidden">
+                            <div id="kpiRoadBar" class="bg-emerald-500 h-1.5 rounded-full" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Stream KPI -->
+                    <div class="glass-card rounded-2xl p-5 shadow-sm border-t-4 border-t-teal-500 hover:shadow-md transition">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">พื้นที่ลำน้ำรวม</span>
+                            <div class="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center">
+                                <i class="fa-solid fa-water"></i>
+                            </div>
+                        </div>
+                        <div class="text-2xl font-bold text-slate-800 mb-1" id="kpiStreamTotal">0 <span class="text-sm font-normal text-slate-500">ไร่</span></div>
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-slate-500">ความก้าวหน้าเฉลี่ย</span>
+                            <span class="font-bold text-teal-600" id="kpiStreamPct">0%</span>
+                        </div>
+                        <div class="w-full bg-teal-100 h-1.5 rounded-full mt-2 overflow-hidden">
+                            <div id="kpiStreamBar" class="bg-teal-500 h-1.5 rounded-full" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Water Source KPI -->
+                    <div class="glass-card rounded-2xl p-5 shadow-sm border-t-4 border-t-cyan-500 hover:shadow-md transition">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">พื้นที่แหล่งน้ำรวม</span>
+                            <div class="w-9 h-9 rounded-xl bg-cyan-100 text-cyan-700 flex items-center justify-center">
+                                <i class="fa-solid fa-droplet"></i>
+                            </div>
+                        </div>
+                        <div class="text-2xl font-bold text-slate-800 mb-1" id="kpiWaterTotal">0 <span class="text-sm font-normal text-slate-500">ไร่</span></div>
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-slate-500">ความก้าวหน้าเฉลี่ย</span>
+                            <span class="font-bold text-cyan-600" id="kpiWaterPct">0%</span>
+                        </div>
+                        <div class="w-full bg-cyan-100 h-1.5 rounded-full mt-2 overflow-hidden">
+                            <div id="kpiWaterBar" class="bg-cyan-500 h-1.5 rounded-full" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- District Status KPI -->
+                    <div class="glass-card rounded-2xl p-5 shadow-sm border-t-4 border-t-lime-500 hover:shadow-md transition">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">สถานะอำเภอ</span>
+                            <div class="w-9 h-9 rounded-xl bg-lime-100 text-lime-700 flex items-center justify-center">
+                                <i class="fa-solid fa-chart-column"></i>
+                            </div>
+                        </div>
+                        <div class="text-2xl font-bold text-slate-800 mb-1" id="kpiDistrictCount">0 <span class="text-sm font-normal text-slate-500">อำเภอ</span></div>
+                        <div class="flex items-center justify-between text-xs text-slate-600">
+                            <span><i class="fa-solid fa-circle text-emerald-500 text-[10px] mr-1"></i>เสร็จแล้ว: <b id="kpiDoneCount">0</b></span>
+                            <span><i class="fa-solid fa-circle text-amber-500 text-[10px] mr-1"></i>กำลังทำ: <b id="kpiPendingCount">0</b></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Section: Stacked into Row 1 & Row 2 -->
+                <div class="space-y-6">
+                    <!-- ROW 1: Bar Chart: Quantity per Employee (Unfinished Work Only) -->
+                    <div class="glass-card rounded-2xl p-5 shadow-sm border border-emerald-100">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
+                            <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-chart-bar text-emerald-600"></i> แถวที่ 1: ปริมาณงานเปรียบเทียบรายบุคคล (เฉพาะงานที่ยังไม่เสร็จ)
+                            </h3>
+                            <span class="text-xs bg-amber-100 text-amber-800 font-semibold px-2.5 py-1 rounded-lg border border-amber-200 self-start sm:self-auto">
+                                <i class="fa-solid fa-filter mr-1"></i> กรองเฉพาะรายการที่ไม่เสร็จ 100%
+                            </span>
+                        </div>
+                        <div class="relative h-80">
+                            <canvas id="barChartQuantity"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- ROW 2: Bar Chart: % Progress per Employee (Unfinished Work Only) -->
+                    <div class="glass-card rounded-2xl p-5 shadow-sm border border-emerald-100">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
+                            <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-chart-line text-teal-600"></i> แถวที่ 2: % ความก้าวหน้าเฉลี่ยรายบุคคล (เฉพาะงานที่ยังไม่เสร็จ)
+                            </h3>
+                            <span class="text-xs bg-amber-100 text-amber-800 font-semibold px-2.5 py-1 rounded-lg border border-amber-200 self-start sm:self-auto">
+                                <i class="fa-solid fa-filter mr-1"></i> กรองเฉพาะรายการที่ไม่เสร็จ 100%
+                            </span>
+                        </div>
+                        <div class="relative h-80">
+                            <canvas id="barChartProgress"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Individual Schedule & Duration Overview -->
+                <div class="glass-card rounded-2xl p-5 shadow-sm border border-emerald-100">
+                    <h3 class="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <i class="fa-regular fa-calendar-check text-emerald-600"></i> สรุประยะเวลาดำเนินงานจำแนกตามรายบุคคลและอำเภอ
+                    </h3>
+                    <div id="individualScheduleGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <!-- Dynamic Cards per employee/district schedule -->
+                    </div>
+                </div>
+
+                <!-- Outstanding Employee & Employee District Completion Summary (Moved to Bottom) -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Star Employee Badge Card -->
+                    <div class="glass-card rounded-2xl p-5 shadow-sm border-2 border-amber-300 bg-gradient-to-br from-amber-50/60 via-white to-emerald-50/40 relative overflow-hidden flex flex-col justify-between">
+                        <div class="absolute -right-4 -top-4 w-24 h-24 bg-amber-200/40 rounded-full blur-xl pointer-events-none"></div>
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-3 py-1 rounded-full border border-amber-300 flex items-center gap-1.5 shadow-sm">
+                                    <i class="fa-solid fa-crown text-amber-500"></i> พนักงานดีเด่น (Top Performer)
+                                </span>
+                                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-400 to-yellow-300 text-white flex items-center justify-center shadow-md">
+                                    <i class="fa-solid fa-award text-xl"></i>
+                                </div>
+                            </div>
+                            <div id="starEmployeeContainer" class="py-2">
+                                <p class="text-slate-400 text-xs">กำลังคำนวณผลงาน...</p>
+                            </div>
+                        </div>
+                        <div class="text-[11px] text-amber-800/80 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/80 mt-3 flex items-center justify-between">
+                            <span><i class="fa-solid fa-circle-info mr-1"></i>วัดผลจากอำเภอที่เสร็จสมบูรณ์ และความก้าวหน้ารวม</span>
+                        </div>
+                    </div>
+
+                    <!-- Summary: Finished Districts per Employee -->
+                    <div class="lg:col-span-2 glass-card rounded-2xl p-5 shadow-sm border border-emerald-100 flex flex-col justify-between">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-list-check text-emerald-600"></i> สรุปจำนวนอำเภอที่ทำงานเสร็จแล้วจำแนกรายบุคคล
+                            </h3>
+                            <span class="text-xs text-slate-500 font-normal">จำนวนอำเภอที่รับผิดชอบ</span>
+                        </div>
+                        <div id="employeeDistrictSummaryGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-52 overflow-y-auto pr-1">
+                            <!-- Dynamic summary pills per officer -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: FORM -->
+            <section id="content-form" class="hidden max-w-3xl mx-auto">
+                <div class="glass-card rounded-2xl p-6 sm:p-8 shadow-md border border-emerald-200">
+                    <div class="border-b border-slate-200/80 pb-4 mb-6 flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-pen-field"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800">แบบฟอร์มกรอก / อัปเดตข้อมูล Digitizer</h2>
+                            <p class="text-xs text-slate-500">บันทึกข้อมูลปริมาณงานและความก้าวหน้าจำแนกตามอำเภอ</p>
+                        </div>
+                    </div>
+
+                    <form id="digitizerForm" onsubmit="handleFormSubmit(event)" class="space-y-6">
+                        <input type="hidden" id="editRowId" value="">
+
+                        <!-- Section 1: Officer & Location -->
+                        <div class="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 space-y-4">
+                            <h3 class="text-xs font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
+                                <i class="fa-solid fa-user-check"></i> 1. ข้อมูลผู้รับผิดชอบและพื้นที่
+                            </h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">ชื่อ-สกุล พนักงาน *</label>
+                                    <select id="formEmployee" required class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                        <option value="">-- เลือกพนักงาน --</option>
+                                        <option value="ปิยนาถ รัตนพรหม">ปิยนาถ รัตนพรหม</option>
+                                        <option value="เสกศักดิ์ สุดฉลาด">เสกศักดิ์ สุดฉลาด</option>
+                                        <option value="วรายุทธ ดาวกลาง">วรายุทธ ดาวกลาง</option>
+                                        <option value="อนิสรา จันคำ">อนิสรา จันคำ</option>
+                                        <option value="ปริญญา ลีลาเมือง">ปริญญา ลีลาเมือง</option>
+                                        <option value="พิพัฒน์พงศ์ ภูลายยาว">พิพัฒน์พงศ์ ภูลายยาว</option>
+                                        <option value="ธรรมรักษ์ โลมะบุตร">ธรรมรักษ์ โลมะบุตร</option>
+                                        <option value="จิตติกร พลชัย">จิตติกร พลชัย</option>
+                                        <option value="วรินทร ส่งศิริ">วรินทร ส่งศิริ</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">จังหวัด *</label>
+                                    <input type="text" id="formProvince" required placeholder="เช่น ชัยภูมิ" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">อำเภอ *</label>
+                                    <input type="text" id="formDistrict" required placeholder="เช่น เมือง" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 2: Quantity -->
+                        <div class="bg-teal-50/50 p-4 rounded-xl border border-teal-100 space-y-4">
+                            <h3 class="text-xs font-bold text-teal-800 uppercase tracking-wider flex items-center gap-1.5">
+                                <i class="fa-solid fa-cubes"></i> 2. ปริมาณงาน (Quantity)
+                            </h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">ถนน (กิโลเมตร)</label>
+                                    <input type="number" step="0.01" min="0" id="formRoadKm" placeholder="0.00" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">ลำน้ำ (ไร่)</label>
+                                    <input type="number" step="0.01" min="0" id="formStreamRai" placeholder="0.00" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">แหล่งน้ำ (ไร่)</label>
+                                    <input type="number" step="0.01" min="0" id="formWaterRai" placeholder="0.00" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 3: Percentage Progress -->
+                        <div class="bg-cyan-50/50 p-4 rounded-xl border border-cyan-100 space-y-4">
+                            <h3 class="text-xs font-bold text-cyan-800 uppercase tracking-wider flex items-center gap-1.5">
+                                <i class="fa-solid fa-percent"></i> 3. % ความก้าวหน้า (% Progress)
+                            </h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">ถนน (%)</label>
+                                    <input type="number" step="0.1" min="0" max="100" id="formRoadPct" placeholder="0 - 100%" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">ลำน้ำ (%)</label>
+                                    <input type="number" step="0.1" min="0" max="100" id="formStreamPct" placeholder="0 - 100%" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">แหล่งน้ำ (%)</label>
+                                    <input type="number" step="0.1" min="0" max="100" id="formWaterPct" placeholder="0 - 100%" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 4: Schedule & Update Date -->
+                        <div class="bg-amber-50/50 p-4 rounded-xl border border-amber-100 space-y-4">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                                    <i class="fa-regular fa-calendar-days"></i> 4. กำหนดเวลาและวันที่อัปเดต
+                                </h3>
+                                <span id="formDurationText" class="text-xs font-semibold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-lg border border-amber-200">
+                                    ระยะเวลา: - วัน
+                                </span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">วันเริ่มงาน *</label>
+                                    <input type="date" id="formStartDate" required onchange="calculateFormDuration()" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">วันที่คาดว่าจะแล้วเสร็จ *</label>
+                                    <input type="date" id="formEndDate" required onchange="calculateFormDuration()" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">วันที่อัปเดตข้อมูล *</label>
+                                    <input type="date" id="formUpdatedAt" required class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="flex items-center justify-end gap-3 pt-2">
+                            <button type="button" onclick="resetForm()" class="px-5 py-2.5 rounded-xl text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition">
+                                ยกเลิก / ล้างฟอร์ม
+                            </button>
+                            <button type="submit" id="btnSubmitForm" class="px-6 py-2.5 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md transition flex items-center gap-2">
+                                <i class="fa-solid fa-floppy-disk"></i> <span id="submitBtnText">บันทึกข้อมูล</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- TAB 3: TABLE -->
+            <section id="content-table" class="hidden space-y-4">
+                <!-- Filters Bar -->
+                <div class="glass-card rounded-2xl p-4 shadow-sm border border-emerald-100 flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div class="relative w-full md:w-80">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-xs"></i>
+                        <input type="text" id="tableSearch" onkeyup="renderTable()" placeholder="ค้นหา ชื่อพนักงาน, จังหวัด, อำเภอ..." class="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                        <select id="filterEmployee" onchange="renderTable()" class="bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            <option value="">-- พนักงานทั้งหมด --</option>
+                            <option value="ปิยนาถ รัตนพรหม">ปิยนาถ รัตนพรหม</option>
+                            <option value="เสกศักดิ์ สุดฉลาด">เสกศักดิ์ สุดฉลาด</option>
+                            <option value="วรายุทธ ดาวกลาง">วรายุทธ ดาวกลาง</option>
+                            <option value="อนิสรา จันคำ">อนิสรา จันคำ</option>
+                            <option value="ปริญญา ลีลาเมือง">ปริญญา ลีลาเมือง</option>
+                            <option value="พิพัฒน์พงศ์ ภูลายยาว">พิพัฒน์พงศ์ ภูลายยาว</option>
+                            <option value="ธรรมรักษ์ โลมะบุตร">ธรรมรักษ์ โลมะบุตร</option>
+                            <option value="จิตติกร พลชัย">จิตติกร พลชัย</option>
+                            <option value="วรินทร ส่งศิริ">วรินทร ส่งศิริ</option>
+                        </select>
+                        <select id="filterStatus" onchange="renderTable()" class="bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            <option value="">-- สถานะทั้งหมด --</option>
+                            <option value="done">เสร็จสมบูรณ์ (100%)</option>
+                            <option value="doing">อยู่ระหว่างดำเนินการ (<100%)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Table Container -->
+                <div class="glass-card rounded-2xl shadow-sm border border-emerald-100 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-emerald-800 text-white uppercase tracking-wider font-semibold">
+                                <tr>
+                                    <th class="py-3.5 px-4">ผู้รับผิดชอบ</th>
+                                    <th class="py-3.5 px-4">พื้นที่ (จังหวัด/อำเภอ)</th>
+                                    <th class="py-3.5 px-4 text-center">ถนน (กม. / %)</th>
+                                    <th class="py-3.5 px-4 text-center">ลำน้ำ (ไร่ / %)</th>
+                                    <th class="py-3.5 px-4 text-center">แหล่งน้ำ (ไร่ / %)</th>
+                                    <th class="py-3.5 px-4 text-center">ระยะเวลาดำเนินงาน (เริ่ม - คาดว่าเสร็จ)</th>
+                                    <th class="py-3.5 px-4 text-center">อัปเดตล่าสุด</th>
+                                    <th class="py-3.5 px-4 text-center">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody" class="divide-y divide-slate-200/70 bg-white/60">
+                                <tr>
+                                    <td colspan="8" class="py-8 text-center text-slate-400">กำลังโหลดข้อมูล...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- API Settings Modal -->
+    <div id="apiModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-emerald-100 space-y-4">
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-link text-emerald-600"></i> ตั้งค่า Google Apps Script Web App
+                </h3>
+                <button onclick="closeApiModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Web App URL (จาก Google Apps Script)</label>
+                <input type="text" id="apiUrlInput" placeholder="https://script.google.com/macros/s/.../exec" class="w-full text-xs bg-slate-50 border border-slate-300 rounded-xl p-3 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                <p class="text-[11px] text-slate-500 mt-1.5">หากเว้นว่างไว้ ระบบจะใช้ข้อมูลจำลอง (Demo Data) สำหรับการทดสอบ</p>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-2">
+                <button onclick="closeApiModal()" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition">ยกเลิก</button>
+                <button onclick="saveApiUrl()" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow transition">บันทึก URL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // Global State
+        let digitizerData = [];
+        const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyx98Kr8oNXjVHLiRDH6bvNYOwnQbRBL_iWtzktQUA0TW9dQ4712pVa5P3-jJNFtoj_jg/exec';
+        let webAppUrl = localStorage.getItem('digitizer_gas_url') || DEFAULT_GAS_URL;
+        let barChartQtyInstance = null;
+        let barChartProgInstance = null;
+
+        // Demo Data for initial display
+        const demoData = [
+            { id: '1', employee: 'ปิยนาถ รัตนพรหม', province: 'ชัยภูมิ', district: 'เมืองชัยภูมิ', road_km: 120.5, stream_rai: 450.0, water_rai: 120.0, road_pct: 100, stream_pct: 90, water_pct: 85, start_date: '2026-09-01', end_date: '2026-09-30', updated_at: '2026-09-10' },
+            { id: '2', employee: 'เสกศักดิ์ สุดฉลาด', province: 'ชัยภูมิ', district: 'บ้านเขว้า', road_km: 85.0, stream_rai: 320.5, water_rai: 95.0, road_pct: 75, stream_pct: 80, water_pct: 70, start_date: '2026-09-01', end_date: '2026-10-15', updated_at: '2026-09-12' },
+            { id: '3', employee: 'วรายุทธ ดาวกลาง', province: 'ชัยภูมิ', district: 'คอนสวรรค์', road_km: 94.2, stream_rai: 280.0, water_rai: 110.0, road_pct: 100, stream_pct: 100, water_pct: 100, start_date: '2026-09-01', end_date: '2026-09-20', updated_at: '2026-09-15' },
+            { id: '4', employee: 'อนิสรา จันคำ', province: 'ชัยภูมิ', district: 'เกษตรสมบูรณ์', road_km: 140.0, stream_rai: 600.0, water_rai: 210.0, road_pct: 60, stream_pct: 55, water_pct: 50, start_date: '2026-09-05', end_date: '2026-10-25', updated_at: '2026-09-14' },
+            { id: '5', employee: 'ปริญญา ลีลาเมือง', province: 'ชัยภูมิ', district: 'หนองบัวแดง', road_km: 110.0, stream_rai: 510.0, water_rai: 180.0, road_pct: 80, stream_pct: 85, water_pct: 90, start_date: '2026-09-01', end_date: '2026-10-10', updated_at: '2026-09-11' },
+            { id: '6', employee: 'พิพัฒน์พงศ์ ภูลายยาว', province: 'ชัยภูมิ', district: 'จัตุรัส', road_km: 98.0, stream_rai: 390.0, water_rai: 140.0, road_pct: 95, stream_pct: 90, water_pct: 92, start_date: '2026-09-01', end_date: '2026-09-30', updated_at: '2026-09-13' },
+            { id: '7', employee: 'ธรรมรักษ์ โลมะบุตร', province: 'ชัยภูมิ', district: 'บำเหน็จณรงค์', road_km: 78.5, stream_rai: 290.0, water_rai: 85.0, road_pct: 100, stream_pct: 100, water_pct: 100, start_date: '2026-09-01', end_date: '2026-09-25', updated_at: '2026-09-16' },
+            { id: '8', employee: 'จิตติกร พลชัย', province: 'ชัยภูมิ', district: 'เทพสถิต', road_km: 105.0, stream_rai: 410.0, water_rai: 130.0, road_pct: 50, stream_pct: 45, water_pct: 60, start_date: '2026-09-10', end_date: '2026-10-31', updated_at: '2026-09-09' },
+            { id: '9', employee: 'วรินทร ส่งศิริ', province: 'ชัยภูมิ', district: 'ภูเขียว', road_km: 130.0, stream_rai: 550.0, water_rai: 195.0, road_pct: 70, stream_pct: 65, water_pct: 75, start_date: '2026-09-01', end_date: '2026-10-20', updated_at: '2026-09-15' }
+        ];
+
+        // Init App
+        window.addEventListener('DOMContentLoaded', () => {
+            const todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('formUpdatedAt').value = todayStr;
+            document.getElementById('formStartDate').value = todayStr;
+            
+            const targetEndDate = new Date();
+            targetEndDate.setDate(targetEndDate.getDate() + 30);
+            document.getElementById('formEndDate').value = targetEndDate.toISOString().split('T')[0];
+            
+            calculateFormDuration();
+            updateApiStatusUI();
+            fetchData();
+        });
+
+        // Helper: normalize raw object from Google Sheets regardless of Thai/English header keys
+        function normalizeRecord(item) {
+            if (!item) return {};
+
+            // Helper to search field by multiple alias keys (case-insensitive)
+            const getVal = (...keys) => {
+                for (const k of keys) {
+                    if (item[k] !== undefined && item[k] !== null && item[k] !== '') return item[k];
+                    const foundKey = Object.keys(item).find(ik => ik.trim().toLowerCase() === k.trim().toLowerCase());
+                    if (foundKey && item[foundKey] !== undefined && item[foundKey] !== null && item[foundKey] !== '') {
+                        return item[foundKey];
+                    }
+                }
+                return '';
+            };
+
+            return {
+                id: getVal('id', 'ID', 'Id'),
+                employee: getVal('employee', 'ชื่อ-สกุล', 'ชื่อพนักงาน', 'พนักงาน', 'Employee', 'Name'),
+                province: getVal('province', 'จังหวัด', 'Province'),
+                district: getVal('district', 'อำเภอ', 'District'),
+                road_km: Number(getVal('road_km', 'ถนน (กม.)', 'ถนน(กม.)', 'ถนน', 'Road_KM') || 0),
+                stream_rai: Number(getVal('stream_rai', 'ลำน้ำ (ไร่)', 'ลำน้ำ(ไร่)', 'ลำน้ำ', 'Stream_Rai') || 0),
+                water_rai: Number(getVal('water_rai', 'แหล่งน้ำ (ไร่)', 'แหล่งน้ำ(ไร่)', 'แหล่งน้ำ', 'Water_Rai') || 0),
+                road_pct: Number(getVal('road_pct', 'ถนน (%)', 'ถนน(%)', 'Road_PCT') || 0),
+                stream_pct: Number(getVal('stream_pct', 'ลำน้ำ (%)', 'ลำน้ำ(%)', 'Stream_PCT') || 0),
+                water_pct: Number(getVal('water_pct', 'แหล่งน้ำ (%)', 'แหล่งน้ำ(%)', 'Water_PCT') || 0),
+                start_date: getVal('start_date', 'วันที่เริ่มงาน', 'วันเริ่มงาน', 'วันเริ่มต้น', 'Start Date', 'StartDate', 'start date', 'START_DATE', 'วันที่เริ่ม'),
+                end_date: getVal('end_date', 'วันที่คาดว่าจะแล้วเสร็จ', 'วันเสร็จงาน', 'วันที่คาดว่าเสร็จ', 'วันสิ้นสุด', 'End Date', 'EndDate', 'end date', 'END_DATE', 'วันที่เสร็จ'),
+                updated_at: getVal('updated_at', 'วันที่อัปเดตข้อมูล', 'วันที่อัพเดทข้อมูล', 'วันที่อัปเดต', 'วันที่อัพเดท', 'Updated_At', 'Updated At')
+            };
+        }
+
+        // Helper: normalize and parse date safely from Google Sheets strings/dates
+        function parseDateSafely(dateInput) {
+            if (!dateInput && dateInput !== 0) return null;
+            if (dateInput instanceof Date) {
+                return isNaN(dateInput.getTime()) ? null : dateInput;
+            }
+
+            // Handle Excel / Google Sheets Serial Date numbers (e.g. 45536)
+            if (typeof dateInput === 'number') {
+                const utc_days  = Math.floor(dateInput - 25569);
+                const utc_value = utc_days * 86400;
+                const date_info = new Date(utc_value * 1000);
+                return isNaN(date_info.getTime()) ? null : date_info;
+            }
+
+            let dStr = String(dateInput).trim();
+            if (!dStr) return null;
+
+            // Strip ISO Time components if present (e.g., T00:00:00.000Z)
+            if (dStr.includes('T')) {
+                dStr = dStr.split('T')[0];
+            } else if (dStr.includes(' ')) {
+                const spaceParts = dStr.split(' ');
+                if (spaceParts[0].includes('-') || spaceParts[0].includes('/')) {
+                    dStr = spaceParts[0];
+                }
+            }
+
+            // Try parsing YYYY-MM-DD or DD/MM/YYYY or YYYY/MM/DD
+            const parts = dStr.split(/[-/.]/);
+            if (parts.length === 3) {
+                const p0 = parseInt(parts[0], 10);
+                const p1 = parseInt(parts[1], 10);
+                const p2 = parseInt(parts[2], 10);
+
+                if (!isNaN(p0) && !isNaN(p1) && !isNaN(p2)) {
+                    let year, month, day;
+                    if (p0 > 1000) {
+                        // YYYY-MM-DD or YYYY/MM/DD
+                        year = p0;
+                        month = p1 - 1;
+                        day = p2;
+                    } else if (p2 > 1000) {
+                        // DD/MM/YYYY or DD-MM-YYYY
+                        year = p2;
+                        day = p0;
+                        month = p1 - 1;
+                    } else {
+                        year = 2000 + p2;
+                        day = p0;
+                        month = p1 - 1;
+                    }
+
+                    // Convert Thai Buddhist Era (BE) to Common Era (CE) e.g., 2569 -> 2026
+                    if (year > 2400) {
+                        year -= 543;
+                    }
+
+                    const parsedDate = new Date(year, month, day);
+                    if (!isNaN(parsedDate.getTime())) return parsedDate;
+                }
+            }
+
+            const nativeDate = new Date(dStr);
+            if (!isNaN(nativeDate.getTime())) {
+                if (nativeDate.getFullYear() > 2400) {
+                    nativeDate.setFullYear(nativeDate.getFullYear() - 543);
+                }
+                return nativeDate;
+            }
+
+            return null;
+        }
+
+        function formatDateISO(dateInput) {
+            const d = parseDateSafely(dateInput);
+            if (!d) return '';
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatDateDisplay(dateInput) {
+            const d = parseDateSafely(dateInput);
+            if (!d) return '-';
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const yearBE = d.getFullYear() + 543;
+            return `${day}/${month}/${yearBE}`;
+        }
+
+        function calculateDaysBetween(startDateStr, endDateStr) {
+            const s = parseDateSafely(startDateStr);
+            const e = parseDateSafely(endDateStr);
+            if (!s || !e) return 0;
+            
+            const utc1 = Date.UTC(s.getFullYear(), s.getMonth(), s.getDate());
+            const utc2 = Date.UTC(e.getFullYear(), e.getMonth(), e.getDate());
+            
+            const diffDays = Math.ceil((utc2 - utc1) / (1000 * 60 * 60 * 24));
+            return Math.max(0, diffDays);
+        }
+
+        function calculateFormDuration() {
+            const startStr = document.getElementById('formStartDate').value;
+            const endStr = document.getElementById('formEndDate').value;
+            const days = calculateDaysBetween(startStr, endStr);
+            document.getElementById('formDurationText').innerText = `ระยะเวลา: ${days} วัน`;
+        }
+
+        function switchTab(tab) {
+            ['dashboard', 'form', 'table'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                const content = document.getElementById(`content-${t}`);
+                if (t === tab) {
+                    btn.classList.add('active');
+                    btn.classList.remove('text-slate-600');
+                    content.classList.remove('hidden');
+                } else {
+                    btn.classList.remove('active');
+                    btn.classList.add('text-slate-600');
+                    content.classList.add('hidden');
+                }
+            });
+
+            if (tab === 'dashboard') {
+                renderDashboard();
+            } else if (tab === 'table') {
+                renderTable();
+            }
+        }
+
+        // Fetch Data from Google Sheets API
+        async function fetchData() {
+            const refreshIcon = document.getElementById('refreshIcon');
+            refreshIcon.classList.add('fa-spin');
+
+            if (!webAppUrl) {
+                digitizerData = demoData.map(normalizeRecord);
+                setTimeout(() => {
+                    refreshIcon.classList.remove('fa-spin');
+                    renderDashboard();
+                    renderTable();
+                }, 500);
+                return;
+            }
+
+            try {
+                const res = await fetch(`${webAppUrl}?action=read`);
+                const json = await res.json();
+                if (json.status === 'success' && Array.isArray(json.data)) {
+                    digitizerData = json.data.map(normalizeRecord);
+                } else {
+                    alert('ไม่สามารถดึงข้อมูลได้: ' + (json.message || 'โครงสร้างข้อมูลไม่ถูกต้อง'));
+                }
+            } catch (err) {
+                console.error(err);
+                alert('เกิดข้อผิดพลาดในการเชื่อมต่อ Google Sheets API');
+            } finally {
+                refreshIcon.classList.remove('fa-spin');
+                renderDashboard();
+                renderTable();
+            }
+        }
+
+        // Render Dashboard KPIs & Charts
+        function renderDashboard() {
+            if (digitizerData.length === 0) return;
+
+            let totalRoad = 0, totalStream = 0, totalWater = 0;
+            let sumRoadPct = 0, sumStreamPct = 0, sumWaterPct = 0;
+            let doneDistricts = 0, pendingDistricts = 0;
+
+            digitizerData.forEach(item => {
+                const rKm = Number(item.road_km) || 0;
+                const sRai = Number(item.stream_rai) || 0;
+                const wRai = Number(item.water_rai) || 0;
+                const rPct = Number(item.road_pct) || 0;
+                const sPct = Number(item.stream_pct) || 0;
+                const wPct = Number(item.water_pct) || 0;
+
+                totalRoad += rKm;
+                totalStream += sRai;
+                totalWater += wRai;
+
+                sumRoadPct += rPct;
+                sumStreamPct += sPct;
+                sumWaterPct += wPct;
+
+                if (rPct >= 100 && sPct >= 100 && wPct >= 100) {
+                    doneDistricts++;
+                } else {
+                    pendingDistricts++;
+                }
+            });
+
+            const count = digitizerData.length;
+            const avgRoadPct = Math.round(sumRoadPct / count);
+            const avgStreamPct = Math.round(sumStreamPct / count);
+            const avgWaterPct = Math.round(sumWaterPct / count);
+
+            document.getElementById('kpiRoadTotal').innerHTML = `${totalRoad.toLocaleString(undefined, {minimumFractionDigits: 1})} <span class="text-sm font-normal text-slate-500">กม.</span>`;
+            document.getElementById('kpiRoadPct').innerText = `${avgRoadPct}%`;
+            document.getElementById('kpiRoadBar').style.width = `${avgRoadPct}%`;
+
+            document.getElementById('kpiStreamTotal').innerHTML = `${totalStream.toLocaleString(undefined, {minimumFractionDigits: 1})} <span class="text-sm font-normal text-slate-500">ไร่</span>`;
+            document.getElementById('kpiStreamPct').innerText = `${avgStreamPct}%`;
+            document.getElementById('kpiStreamBar').style.width = `${avgStreamPct}%`;
+
+            document.getElementById('kpiWaterTotal').innerHTML = `${totalWater.toLocaleString(undefined, {minimumFractionDigits: 1})} <span class="text-sm font-normal text-slate-500">ไร่</span>`;
+            document.getElementById('kpiWaterPct').innerText = `${avgWaterPct}%`;
+            document.getElementById('kpiWaterBar').style.width = `${avgWaterPct}%`;
+
+            document.getElementById('kpiDistrictCount').innerHTML = `${count} <span class="text-sm font-normal text-slate-500">อำเภอ</span>`;
+            document.getElementById('kpiDoneCount').innerText = doneDistricts;
+            document.getElementById('kpiPendingCount').innerText = pendingDistricts;
+
+            renderEmployeeCompletionStats();
+            renderCharts();
+            renderIndividualSchedules();
+        }
+
+        // Calculate Completed Districts per Officer & Star Employee
+        function renderEmployeeCompletionStats() {
+            const employeeStats = {};
+
+            digitizerData.forEach(item => {
+                const emp = item.employee || 'ไม่ระบุชื่อ';
+                if (!employeeStats[emp]) {
+                    employeeStats[emp] = {
+                        name: emp,
+                        totalDistricts: 0,
+                        completedDistricts: 0,
+                        totalAvgPct: 0,
+                        totalVol: 0
+                    };
+                }
+
+                const rPct = Number(item.road_pct) || 0;
+                const sPct = Number(item.stream_pct) || 0;
+                const wPct = Number(item.water_pct) || 0;
+                const avgPct = (rPct + sPct + wPct) / 3;
+                const vol = (Number(item.road_km) || 0) + (Number(item.stream_rai) || 0) + (Number(item.water_rai) || 0);
+
+                employeeStats[emp].totalDistricts += 1;
+                employeeStats[emp].totalAvgPct += avgPct;
+                employeeStats[emp].totalVol += vol;
+
+                if (rPct >= 100 && sPct >= 100 && wPct >= 100) {
+                    employeeStats[emp].completedDistricts += 1;
+                }
+            });
+
+            const statList = Object.values(employeeStats);
+
+            // Render Employee Completion Breakdown
+            const summaryGrid = document.getElementById('employeeDistrictSummaryGrid');
+            if (summaryGrid) {
+                summaryGrid.innerHTML = statList.map(st => {
+                    const pct = Math.round(st.totalAvgPct / st.totalDistricts);
+                    return `
+                        <div class="bg-white/90 p-2.5 rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
+                            <div class="truncate pr-2">
+                                <div class="font-bold text-slate-800 text-xs truncate">${st.name}</div>
+                                <div class="text-[11px] text-slate-500">ความก้าวหน้าเฉลี่ย: ${pct}%</div>
+                            </div>
+                            <div class="text-right whitespace-nowrap">
+                                <span class="inline-block px-2 py-0.5 rounded-lg text-xs font-bold ${st.completedDistricts > 0 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-600'}">
+                                    เสร็จ ${st.completedDistricts}/${st.totalDistricts}
+                                </span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Determine Outstanding Employee (Most completed districts, then highest avg progress)
+            let topEmp = null;
+            statList.forEach(st => {
+                const avgPct = st.totalAvgPct / st.totalDistricts;
+                st.score = (st.completedDistricts * 1000) + avgPct;
+                if (!topEmp || st.score > topEmp.score) {
+                    topEmp = st;
+                }
+            });
+
+            const starContainer = document.getElementById('starEmployeeContainer');
+            if (starContainer && topEmp) {
+                const avgPctFormatted = Math.round(topEmp.totalAvgPct / topEmp.totalDistricts);
+                starContainer.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-2xl bg-amber-100 border-2 border-amber-300 text-amber-600 flex items-center justify-center text-xl font-bold shadow-inner">
+                            <i class="fa-solid fa-user-ninja"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-extrabold text-slate-800 tracking-tight">${topEmp.name}</h4>
+                            <p class="text-xs text-amber-900 font-medium">
+                                <i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i>ส่งมอบงานแล้ว <b class="text-emerald-700 text-sm">${topEmp.completedDistricts}</b> / ${topEmp.totalDistricts} อำเภอ
+                            </p>
+                            <p class="text-xs text-slate-500">ความก้าวหน้ารวมเฉลี่ย <b class="text-slate-700">${avgPctFormatted}%</b></p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Render Individual Employee Schedule Cards
+        function renderIndividualSchedules() {
+            const container = document.getElementById('individualScheduleGrid');
+            if (!container) return;
+
+            if (digitizerData.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center text-slate-400 py-4 text-xs">ไม่มีข้อมูลกำหนดเวลา</div>';
+                return;
+            }
+
+            container.innerHTML = digitizerData.map(item => {
+                const startStr = formatDateDisplay(item.start_date);
+                const endStr = formatDateDisplay(item.end_date);
+                const days = calculateDaysBetween(item.start_date, item.end_date);
+                const avgPct = Math.round(((Number(item.road_pct) || 0) + (Number(item.stream_pct) || 0) + (Number(item.water_pct) || 0)) / 3);
+                const isDone = avgPct >= 100;
+
+                return `
+                    <div class="bg-white/80 p-3.5 rounded-xl border ${isDone ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-200'} shadow-2xs space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold text-xs text-slate-800 truncate">${item.employee}</span>
+                            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${isDone ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                                ${isDone ? 'เสร็จสมบูรณ์' : `ก้าวหน้า ${avgPct}%`}
+                            </span>
+                        </div>
+                        <div class="text-xs text-slate-600 flex items-center justify-between">
+                            <span><i class="fa-solid fa-location-dot text-emerald-600 mr-1"></i><b>${item.district}</b> (จ.${item.province})</span>
+                            <span class="text-[11px] font-medium text-slate-500">${days} วัน</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 flex items-center justify-between bg-slate-50 px-2 py-1 rounded-lg">
+                            <span><i class="fa-regular fa-calendar-days mr-1 text-slate-400"></i>${startStr} - ${endStr}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderCharts() {
+            // Requirement: Show ONLY unfinished work (Average % < 100 or any parameter < 100)
+            const unfinishedData = digitizerData.filter(d => {
+                const rPct = Number(d.road_pct) || 0;
+                const sPct = Number(d.stream_pct) || 0;
+                const wPct = Number(d.water_pct) || 0;
+                return !(rPct >= 100 && sPct >= 100 && wPct >= 100);
+            });
+
+            const labels = unfinishedData.map(d => `${d.employee.split(' ')[0]} (${d.district})`);
+            const roadData = unfinishedData.map(d => Number(d.road_km) || 0);
+            const streamData = unfinishedData.map(d => Number(d.stream_rai) || 0);
+            const waterData = unfinishedData.map(d => Number(d.water_rai) || 0);
+
+            const roadPctData = unfinishedData.map(d => Number(d.road_pct) || 0);
+            const streamPctData = unfinishedData.map(d => Number(d.stream_pct) || 0);
+            const waterPctData = unfinishedData.map(d => Number(d.water_pct) || 0);
+
+            // Pastel Colors Palette
+            // ถนน (Road): Pastel Red (#f87171)
+            // ลำน้ำ (Stream): Pastel Light Blue (#38bdf8)
+            // แหล่งน้ำ (Water): Pastel Darker Blue (#3b82f6)
+            const pastelRed = '#f87171';
+            const pastelSkyBlue = '#38bdf8';
+            const pastelRoyalBlue = '#3b82f6';
+
+            if (barChartQtyInstance) barChartQtyInstance.destroy();
+            const ctxQty = document.getElementById('barChartQuantity').getContext('2d');
+            barChartQtyInstance = new Chart(ctxQty, {
+                type: 'bar',
+                data: {
+                    labels: labels.length > 0 ? labels : ['ไม่มีงานคงค้าง'],
+                    datasets: [
+                        { label: 'ถนน (กม.)', data: roadData, backgroundColor: pastelRed, borderRadius: 6 },
+                        { label: 'ลำน้ำ (ไร่)', data: streamData, backgroundColor: pastelSkyBlue, borderRadius: 6 },
+                        { label: 'แหล่งน้ำ (ไร่)', data: waterData, backgroundColor: pastelRoyalBlue, borderRadius: 6 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => `งานค้าง: ${items[0].label}`
+                            }
+                        }
+                    },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+
+            if (barChartProgInstance) barChartProgInstance.destroy();
+            const ctxProg = document.getElementById('barChartProgress').getContext('2d');
+            barChartProgInstance = new Chart(ctxProg, {
+                type: 'bar',
+                data: {
+                    labels: labels.length > 0 ? labels : ['ไม่มีงานคงค้าง'],
+                    datasets: [
+                        { label: 'ถนน (%)', data: roadPctData, backgroundColor: pastelRed, borderRadius: 6 },
+                        { label: 'ลำน้ำ (%)', data: streamPctData, backgroundColor: pastelSkyBlue, borderRadius: 6 },
+                        { label: 'แหล่งน้ำ (%)', data: waterPctData, backgroundColor: pastelRoyalBlue, borderRadius: 6 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => `งานค้าง: ${items[0].label}`
+                            }
+                        }
+                    },
+                    scales: { y: { beginAtZero: true, max: 100 } }
+                }
+            });
+        }
+
+        // Render Data Table
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            const search = document.getElementById('tableSearch').value.toLowerCase();
+            const empFilter = document.getElementById('filterEmployee').value;
+            const statusFilter = document.getElementById('filterStatus').value;
+
+            const filtered = digitizerData.filter(item => {
+                const textMatch = item.employee.toLowerCase().includes(search) || 
+                                  item.province.toLowerCase().includes(search) || 
+                                  item.district.toLowerCase().includes(search);
+                const empMatch = !empFilter || item.employee === empFilter;
+                
+                const isDone = Number(item.road_pct) >= 100 && Number(item.stream_pct) >= 100 && Number(item.water_pct) >= 100;
+                const statusMatch = !statusFilter || (statusFilter === 'done' ? isDone : !isDone);
+
+                return textMatch && empMatch && statusMatch;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-400">ไม่พบข้อมูลที่ตรงตามเงื่อนไข</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(item => {
+                const avgPct = Math.round((Number(item.road_pct) + Number(item.stream_pct) + Number(item.water_pct)) / 3);
+                const statusBadge = avgPct >= 100 
+                    ? `<span class="inline-block bg-emerald-100 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-emerald-300"><i class="fa-solid fa-check mr-1"></i>เสร็จสมบูรณ์</span>`
+                    : `<span class="inline-block bg-amber-100 text-amber-800 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-amber-300"><i class="fa-solid fa-clock mr-1"></i>กำลังดำเนินการ (${avgPct}%)</span>`;
+
+                const startDateClean = formatDateDisplay(item.start_date);
+                const endDateClean = formatDateDisplay(item.end_date);
+                const totalDays = calculateDaysBetween(item.start_date, item.end_date);
+                const dateRangeStr = (startDateClean !== '-' || endDateClean !== '-')
+                    ? `<span class="text-slate-700 font-medium">${startDateClean} ถึง ${endDateClean}</span><br/><span class="text-emerald-700 font-semibold text-[11px]">(${totalDays} วัน)</span>`
+                    : `<span class="text-slate-400">-</span>`;
+
+                return `
+                    <tr class="hover:bg-emerald-50/40 transition">
+                        <td class="py-3 px-4 font-semibold text-slate-800">
+                            ${item.employee}
+                            <div class="mt-0.5">${statusBadge}</div>
+                        </td>
+                        <td class="py-3 px-4 text-slate-600">
+                            <div><b>${item.district}</b></div>
+                            <div class="text-[11px] text-slate-400">จ.${item.province}</div>
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <span class="font-medium">${Number(item.road_km).toLocaleString()} กม.</span>
+                            <div class="text-[11px] text-emerald-600 font-bold">${item.road_pct}%</div>
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <span class="font-medium">${Number(item.stream_rai).toLocaleString()} ไร่</span>
+                            <div class="text-[11px] text-teal-600 font-bold">${item.stream_pct}%</div>
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <span class="font-medium">${Number(item.water_rai).toLocaleString()} ไร่</span>
+                            <div class="text-[11px] text-cyan-600 font-bold">${item.water_pct}%</div>
+                        </td>
+                        <td class="py-3 px-4 text-center">${dateRangeStr}</td>
+                        <td class="py-3 px-4 text-center text-slate-500">${formatDateDisplay(item.updated_at)}</td>
+                        <td class="py-3 px-4 text-center">
+                            <div class="flex items-center justify-center gap-1.5">
+                                <button onclick="editRecord('${item.id}')" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="แก้ไข">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </button>
+                                <button onclick="deleteRecord('${item.id}')" class="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition" title="ลบ">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Form Submit Handler
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            const submitBtn = document.getElementById('btnSubmitForm');
+            const submitBtnText = document.getElementById('submitBtnText');
+            
+            const editId = document.getElementById('editRowId').value;
+            const payload = {
+                id: editId || 'REC_' + new Date().getTime(),
+                employee: document.getElementById('formEmployee').value,
+                province: document.getElementById('formProvince').value,
+                district: document.getElementById('formDistrict').value,
+                road_km: Number(document.getElementById('formRoadKm').value) || 0,
+                stream_rai: Number(document.getElementById('formStreamRai').value) || 0,
+                water_rai: Number(document.getElementById('formWaterRai').value) || 0,
+                road_pct: Number(document.getElementById('formRoadPct').value) || 0,
+                stream_pct: Number(document.getElementById('formStreamPct').value) || 0,
+                water_pct: Number(document.getElementById('formWaterPct').value) || 0,
+                start_date: document.getElementById('formStartDate').value,
+                end_date: document.getElementById('formEndDate').value,
+                updated_at: document.getElementById('formUpdatedAt').value
+            };
+
+            submitBtn.disabled = true;
+            submitBtnText.innerText = 'กำลังบันทึก...';
+
+            if (!webAppUrl) {
+                if (editId) {
+                    const idx = digitizerData.findIndex(d => String(d.id) === String(editId));
+                    if (idx !== -1) digitizerData[idx] = payload;
+                } else {
+                    digitizerData.push(payload);
+                }
+                setTimeout(() => {
+                    alert('บันทึกข้อมูลเรียบร้อยแล้ว (โหมด Demo)');
+                    resetForm();
+                    submitBtn.disabled = false;
+                    submitBtnText.innerText = 'บันทึกข้อมูล';
+                    switchTab('table');
+                }, 400);
+                return;
+            }
+
+            try {
+                const action = editId ? 'update' : 'create';
+                const res = await fetch(webAppUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: action, data: payload })
+                });
+                const json = await res.json();
+
+                if (json.status === 'success') {
+                    alert('บันทึกข้อมูลไปยัง Google Sheets สำเร็จ!');
+                    resetForm();
+                    await fetchData();
+                    switchTab('table');
+                } else {
+                    alert('เกิดข้อผิดพลาด: ' + json.message);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('ไม่สามารถบันทึกข้อมูลไปยัง Google Sheets ได้');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtnText.innerText = 'บันทึกข้อมูล';
+            }
+        }
+
+        // Edit Record
+        function editRecord(id) {
+            const item = digitizerData.find(d => String(d.id) === String(id));
+            if (!item) return;
+
+            document.getElementById('editRowId').value = item.id;
+            document.getElementById('formEmployee').value = item.employee;
+            document.getElementById('formProvince').value = item.province;
+            document.getElementById('formDistrict').value = item.district;
+            document.getElementById('formRoadKm').value = item.road_km;
+            document.getElementById('formStreamRai').value = item.stream_rai;
+            document.getElementById('formWaterRai').value = item.water_rai;
+            document.getElementById('formRoadPct').value = item.road_pct;
+            document.getElementById('formStreamPct').value = item.stream_pct;
+            document.getElementById('formWaterPct').value = item.water_pct;
+            document.getElementById('formStartDate').value = formatDateISO(item.start_date);
+            document.getElementById('formEndDate').value = formatDateISO(item.end_date);
+            document.getElementById('formUpdatedAt').value = formatDateISO(item.updated_at) || new Date().toISOString().split('T')[0];
+
+            calculateFormDuration();
+            document.getElementById('submitBtnText').innerText = 'อัปเดตข้อมูล';
+            switchTab('form');
+        }
+
+        function resetForm() {
+            document.getElementById('digitizerForm').reset();
+            document.getElementById('editRowId').value = '';
+            document.getElementById('submitBtnText').innerText = 'บันทึกข้อมูล';
+            const todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('formStartDate').value = todayStr;
+            document.getElementById('formUpdatedAt').value = todayStr;
+            calculateFormDuration();
+        }
+
+        // Delete Record
+        async function deleteRecord(id) {
+            if (!confirm('คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?')) return;
+
+            if (!webAppUrl) {
+                digitizerData = digitizerData.filter(d => String(d.id) !== String(id));
+                renderDashboard();
+                renderTable();
+                alert('ลบรายการเรียบร้อย (โหมด Demo)');
+                return;
+            }
+
+            try {
+                const res = await fetch(webAppUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'delete', data: { id: id } })
+                });
+                const json = await res.json();
+                if (json.status === 'success') {
+                    alert('ลบข้อมูลสำเร็จ');
+                    fetchData();
+                } else {
+                    alert('ไม่สามารถลบข้อมูลได้: ' + json.message);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+            }
+        }
+
+        // Settings API Modal Functions
+        function openApiModal() {
+            document.getElementById('apiUrlInput').value = webAppUrl;
+            document.getElementById('apiModal').classList.remove('hidden');
+        }
+
+        function closeApiModal() {
+            document.getElementById('apiModal').classList.add('hidden');
+        }
+
+        function saveApiUrl() {
+            const input = document.getElementById('apiUrlInput').value.trim();
+            webAppUrl = input;
+            localStorage.setItem('digitizer_gas_url', input);
+            updateApiStatusUI();
+            closeApiModal();
+            fetchData();
+        }
+
+        function updateApiStatusUI() {
+            const statusText = document.getElementById('apiUrlStatusText');
+            if (webAppUrl) {
+                statusText.innerHTML = '<span class="text-emerald-700 font-semibold"><i class="fa-solid fa-circle-check text-emerald-600"></i> เชื่อมต่อ Google Sheets แล้ว</span>';
+            } else {
+                statusText.innerText = 'ตั้งค่า Web App URL (โหมด Demo)';
+            }
+        }
+    </script>
+</body>
+</html>
