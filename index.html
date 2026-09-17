@@ -231,9 +231,14 @@
 
                 <!-- Individual Schedule & Duration Overview -->
                 <div class="glass-card rounded-2xl p-5 shadow-sm border border-emerald-100">
-                    <h3 class="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
-                        <i class="fa-regular fa-calendar-check text-emerald-600"></i> สรุประยะเวลาดำเนินงานจำแนกตามรายบุคคลและอำเภอ
-                    </h3>
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
+                        <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-regular fa-calendar-check text-emerald-600"></i> สรุประยะเวลาดำเนินงานจำแนกตามรายบุคคลและอำเภอ
+                        </h3>
+                        <span class="text-xs bg-amber-100 text-amber-800 font-semibold px-2.5 py-1 rounded-lg border border-amber-200 self-start sm:self-auto">
+                            <i class="fa-solid fa-filter mr-1"></i> กรองเฉพาะรายการที่ไม่เสร็จ 100%
+                        </span>
+                    </div>
                     <div id="individualScheduleGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         <!-- Dynamic Cards per employee/district schedule -->
                     </div>
@@ -866,24 +871,31 @@
             const container = document.getElementById('individualScheduleGrid');
             if (!container) return;
 
-            if (digitizerData.length === 0) {
-                container.innerHTML = '<div class="col-span-full text-center text-slate-400 py-4 text-xs">ไม่มีข้อมูลกำหนดเวลา</div>';
+            // Filter for unfinished work only (where work is not 100% completed across all layers)
+            const unfinishedData = digitizerData.filter(item => {
+                const rPct = Number(item.road_pct) || 0;
+                const sPct = Number(item.stream_pct) || 0;
+                const wPct = Number(item.water_pct) || 0;
+                return !(rPct >= 100 && sPct >= 100 && wPct >= 100);
+            });
+
+            if (unfinishedData.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center text-slate-500 py-6 text-xs bg-slate-50/50 rounded-xl border border-dashed border-slate-200"><i class="fa-solid fa-circle-check text-emerald-600 mr-1.5"></i>ไม่มีรายการงานคงค้าง (ดำเนินงานเสร็จสมบูรณ์ทุกอำเภอแล้ว)</div>';
                 return;
             }
 
-            container.innerHTML = digitizerData.map(item => {
+            container.innerHTML = unfinishedData.map(item => {
                 const startStr = formatDateDisplay(item.start_date);
                 const endStr = formatDateDisplay(item.end_date);
                 const days = calculateDaysBetween(item.start_date, item.end_date);
                 const avgPct = Math.round(((Number(item.road_pct) || 0) + (Number(item.stream_pct) || 0) + (Number(item.water_pct) || 0)) / 3);
-                const isDone = avgPct >= 100;
 
                 return `
-                    <div class="bg-white/80 p-3.5 rounded-xl border ${isDone ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-200'} shadow-2xs space-y-2">
+                    <div class="bg-white/80 p-3.5 rounded-xl border border-amber-200 shadow-2xs space-y-2">
                         <div class="flex items-center justify-between">
                             <span class="font-bold text-xs text-slate-800 truncate">${item.employee}</span>
-                            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${isDone ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
-                                ${isDone ? 'เสร็จสมบูรณ์' : `ก้าวหน้า ${avgPct}%`}
+                            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                                ก้าวหน้า ${avgPct}%
                             </span>
                         </div>
                         <div class="text-xs text-slate-600 flex items-center justify-between">
