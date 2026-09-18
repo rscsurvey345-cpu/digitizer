@@ -280,6 +280,21 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Grouped Bar Chart: District Completion Summary per Employee -->
+                <div class="glass-card rounded-2xl p-5 shadow-sm border border-emerald-100">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
+                        <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-column text-emerald-600"></i> กราฟสรุปจำนวนอำเภอที่ทำงานเสร็จแล้วจำแนกรายบุคคล
+                        </h3>
+                        <span class="text-xs bg-emerald-100 text-emerald-800 font-semibold px-2.5 py-1 rounded-lg border border-emerald-200 self-start sm:self-auto">
+                            <i class="fa-solid fa-layer-group mr-1"></i> เปรียบเทียบอำเภอที่เสร็จ 100% vs อำเภอทั้งหมด
+                        </span>
+                    </div>
+                    <div class="relative h-80">
+                        <canvas id="barChartDistrictCompletion"></canvas>
+                    </div>
+                </div>
             </section>
 
             <!-- TAB 2: FORM -->
@@ -497,6 +512,7 @@
         let webAppUrl = localStorage.getItem('digitizer_gas_url') || DEFAULT_GAS_URL;
         let barChartQtyInstance = null;
         let barChartProgInstance = null;
+        let barChartDistrictCompInstance = null;
 
         // Demo Data for initial display
         const demoData = [
@@ -987,6 +1003,69 @@
                         }
                     },
                     scales: { y: { beginAtZero: true, max: 100 } }
+                }
+            });
+
+            // Render Grouped Bar Chart: Completed Districts vs Total Assigned Districts per Employee
+            const empDistrictStats = {};
+            digitizerData.forEach(d => {
+                const emp = d.employee || 'ไม่ระบุชื่อ';
+                if (!empDistrictStats[emp]) {
+                    empDistrictStats[emp] = { completed: 0, total: 0 };
+                }
+                empDistrictStats[emp].total += 1;
+
+                const rPct = Number(d.road_pct) || 0;
+                const sPct = Number(d.stream_pct) || 0;
+                const wPct = Number(d.water_pct) || 0;
+
+                if (rPct >= 100 && sPct >= 100 && wPct >= 100) {
+                    empDistrictStats[emp].completed += 1;
+                }
+            });
+
+            const empNames = Object.keys(empDistrictStats);
+            const completedCounts = empNames.map(name => empDistrictStats[name].completed);
+            const totalCounts = empNames.map(name => empDistrictStats[name].total);
+
+            if (barChartDistrictCompInstance) barChartDistrictCompInstance.destroy();
+            const ctxDistrictComp = document.getElementById('barChartDistrictCompletion').getContext('2d');
+            barChartDistrictCompInstance = new Chart(ctxDistrictComp, {
+                type: 'bar',
+                data: {
+                    labels: empNames.map(name => name.split(' ')[0]),
+                    datasets: [
+                        {
+                            label: 'อำเภอที่ทำเสร็จครบ 100%',
+                            data: completedCounts,
+                            backgroundColor: '#059669', // Emerald 600
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'จำนวนอำเภอรวมทั้งหมด',
+                            data: totalCounts,
+                            backgroundColor: '#94a3b8', // Slate 400
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => `พนักงาน: ${empNames[items[0].dataIndex]}`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1, precision: 0 }
+                        }
+                    }
                 }
             });
         }
